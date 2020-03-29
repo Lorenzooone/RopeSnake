@@ -482,6 +482,16 @@ namespace RopeSnake.Mother3.Title
         {
             int X = Position.X_Coord;
             int Y = Position.Y_Coord;
+
+            if (X <= 0x100)
+                X += 0x100;
+            else
+                X -= 0x100;
+            if (Y <= 0x80)
+                Y += 0x80;
+            else
+                Y -= 0x80;
+
             int YLen = (Entry.Height / 8) + (Entry.Height % 8 == 0 ? 0 : 1);
             StartingPos = readImage_OAM(Entry, StartingPos, EntriesGraphics, Palettes, XLen, startingAddress, PALPreset);
             for (int j = 0; j < startingAddress.Count; j++)
@@ -592,7 +602,7 @@ namespace RopeSnake.Mother3.Title
             List<byte[]> finalProducts = new List<byte[]>();
             byte[] MenuPalettes = PALGet(Menu_Options_Palette);
             List<byte>[] OAMEntries = new List<byte>[Menu_Options.Count];
-            Byte[] FinalGraphicsProduct = Gba.GbaExtensions.WriteCompressed(Generate_OAM_Graphics_Palette(Menu_Options, Positions, OAMEntries, MenuPalettes, true), true);
+            Byte[] FinalGraphicsProduct = GBA.LZ77.Compress(Generate_OAM_Graphics_Palette(Menu_Options, Positions, OAMEntries, MenuPalettes, true), true);
             byte[] FinalOAMProduct = buildOAM(OAMEntries, OAMRemains, true, true);
             finalProducts.Add(FinalGraphicsProduct);
             finalProducts.Add(MenuPalettes);
@@ -643,7 +653,7 @@ namespace RopeSnake.Mother3.Title
             byte[] ArrangementStatic = TitleExec(Logo[4], TitleStatic, LogoPalettes, 0x800);
             LogoPalettes[0] = 0;
             LogoPalettes[1] = 0;
-            Product.Add(Gba.GbaExtensions.WriteCompressed(TitleStatic.ToArray(), true));
+            Product.Add(GBA.LZ77.Compress(TitleStatic.ToArray(), true));
             Product.Add(LogoPalettes);
             Product.Add(ArrangementStatic);
             LogoPalettes = new byte[0x200];
@@ -691,7 +701,7 @@ namespace RopeSnake.Mother3.Title
             //Press a button graphic
             List<byte> OAMEntry = new List<byte>();
             setPalettes(MainPalette, false);
-            byte[] Press_Graphics = Gba.GbaExtensions.WriteCompressed(Generate_OAM_Graphics_Palette(Health[1], Position, ref OAMEntry, MainPalette, false), true);
+            byte[] Press_Graphics = GBA.LZ77.Compress(Generate_OAM_Graphics_Palette(Health[1], Position, ref OAMEntry, MainPalette, false), true);
             byte[] Press_OAM = buildOAM(new List<byte>[] { OAMEntry }, new List<byte[]> { OAMRemains }, false, true);
 
             //Health graphic
@@ -702,8 +712,8 @@ namespace RopeSnake.Mother3.Title
             byte[] MainGraphics = new byte[length];
             for (int i = 0; i < length; i++)
                 MainGraphics[i] = MainGraphicsBuffer[i];
-            MainGraphics = Gba.GbaExtensions.WriteCompressed(MainGraphics, true);
-            MainArrangements = Gba.GbaExtensions.WriteCompressed(MainArrangements, true);
+            MainGraphics = GBA.LZ77.Compress(MainGraphics, true);
+            MainArrangements = GBA.LZ77.Compress(MainArrangements, true);
 
             //Ending
             List<byte[]> Products = new List<byte[]>();
@@ -740,7 +750,7 @@ namespace RopeSnake.Mother3.Title
             //Ending
             List<byte[]> Products = new List<byte[]>();
             Products.Add(DisclaimerPalette);
-            Products.Add(Gba.GbaExtensions.WriteCompressed(DisclaimerExec(Disclaimer, DisclaimerPalette), true));
+            Products.Add(GBA.LZ77.Compress(DisclaimerExec(Disclaimer, DisclaimerPalette), true));
             return Products;
         }
     }

@@ -257,31 +257,21 @@ namespace RopeSnake.Mother3.Title
             int i;
             for (i = 0; i < (RomData[num] + (RomData[num + 1] << 8)); i++)
             {
-                XY c = new XY();
-                int Y = RomData[num + cont + 2];
-                int X = (RomData[num + cont + 4] + ((RomData[num + cont + 5] & 0x1) << 8));
-                if (Y >= 128)
-                    Y = Y - 256;
-                if (X >= 256)
-                    X = X - 512;
-                c.Option_Number = d.Count;
-                c.X_Coord = X;
-                c.Y_Coord = Y;
-                c.Name = Name + i;
+                int Y = 0x100;
+                int X = 0x200;
                 int TotSingle = RomData[num + cont] + (RomData[num + cont + 1] << 8);
                 if (TotSingle == 0)
                     break;
-                d.Add(c);
                 OAMList a = new OAMList();
                 for (int u = 0; u < TotSingle; u++)
                 {
                     OAM b = new OAM();
                     b.Y = RomData[num + (u * 6) + cont + 2];
+                    b.X = (RomData[num + (u * 6) + cont + 4] + ((RomData[num + (u * 6) + cont + 5] & 0x1) << 8));
                     if (b.Y >= 0x80)
                         b.Y -= 0x80;
                     else
                         b.Y += 0x80;
-                    b.X = (RomData[num + (u * 6) + cont + 4] + ((RomData[num + (u * 6) + cont + 5] & 0x1) << 8));
                     if (b.X >= 0x100)
                         b.X -= 0x100;
                     else
@@ -292,9 +282,20 @@ namespace RopeSnake.Mother3.Title
                     b.Tile = (RomData[num + (u * 6) + cont + 6] + ((RomData[num + cont + (u * 6) + 7] & 0x3) << 8));
                     b.Palette = (byte)((RomData[num + (u * 6) + cont + 7] >> 4));
                     a.OAMs.Add(b);
+
+                    X = Math.Min(X, b.X);
+                    Y = Math.Min(Y, b.Y);
                 }
                 OAMLists.Add(a);
                 cont += (TotSingle * 6) + 4;
+                XY c = new XY
+                {
+                    Option_Number = d.Count,
+                    X_Coord = X,
+                    Y_Coord = Y,
+                    Name = Name + i
+                };
+                d.Add(c);
             }
             if (doEnd)
             {

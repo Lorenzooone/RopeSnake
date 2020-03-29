@@ -59,46 +59,8 @@ namespace Rendering
             return SingleRender(Palette, Image, width * 8, height * 8, 0);
         }
     }
-class Compose
+    class Compose
     {
-        static char ConvertHexToChar(int a)
-        {
-            switch (a)
-            {
-                case 1:
-                    return '1';
-                case 2:
-                    return '2';
-                case 3:
-                    return '3';
-                case 4:
-                    return '4';
-                case 5:
-                    return '5';
-                case 6:
-                    return '6';
-                case 7:
-                    return '7';
-                case 8:
-                    return '8';
-                case 9:
-                    return '9';
-                case 10:
-                    return 'A';
-                case 11:
-                    return 'B';
-                case 12:
-                    return 'C';
-                case 13:
-                    return 'D';
-                case 14:
-                    return 'E';
-                case 15:
-                    return 'F';
-                default:
-                    return '0';
-            }
-        }
         public static Bitmap MergeTwo32Argb(Bitmap firstImage, Bitmap secondImage, int xsecond, int ysecond)
         {
             if (firstImage == null)
@@ -121,7 +83,7 @@ class Compose
             }
             return outputImage;
         }
-        unsafe static bool CheckSame(Bitmap firstImage, Bitmap secondImage)
+        public static bool CheckSame(Bitmap firstImage, Bitmap secondImage)
         {
             for (int i = 0; i < Math.Min(firstImage.Height, secondImage.Height); i++)
                 for (int j = 0; j < Math.Min(firstImage.Width, secondImage.Width); j++)
@@ -156,7 +118,7 @@ class Compose
             secondImage.UnlockBits(N2);
             return outputImage;
         }
-        static Bitmap CreateRender(List<GBA.OAM> OAMEntry, GBA.PAL[] Palette, byte[] Image, int Wanted)
+        public static Bitmap CreateRender(List<GBA.OAM> OAMEntry, GBA.PAL[] Palette, byte[] Image, int Wanted)
         {
             List<Bitmap> Tempo = new List<Bitmap>();
             List<int> X = new List<int>();
@@ -227,42 +189,6 @@ class Compose
             for (int i = 0; i < Image.Length; i++)
                 arr[i] = Image[i >> 5, i & 0x1F];
             return SinglePiece.SingleRender(GBA.PAL.PALGet(Palette), arr, width, height);
-        }
-        public static void Output(List<GBA.OAM> OAMEntry, GBA.PAL[] Palette, byte[] Image, int Num, string outputPath, IProgress<ProgressPercent> Progress)
-        {
-            string a = outputPath;
-            string b = "";
-            if (Num < 10)
-                b += "00";
-            else if (Num < 100)
-            {
-                b += "0";
-                b += ConvertHexToChar(Num / 10);
-            }
-            else
-            {
-                b += ConvertHexToChar(Num / 100);
-                b += ConvertHexToChar((Num / 10) % 10);
-            }
-            b += Num % 10;
-            a += b;
-            Bitmap Temp, Temp2;
-            if ((OAMEntry.Exists(x => x.Num == 1)))
-            {
-                Temp2 = CreateRender(OAMEntry, Palette, Image, 1);
-                Temp = CreateRender(OAMEntry, Palette, Image, 0);
-                if ((CheckSame(Temp, Temp2)) == false)
-                {
-                    Progress?.Report(new ProgressPercent("Writing /BattleSprites/"+b+"Back.png",
-                        ((Num * 100f) / 257)));
-                    Temp2.Save(a + "Back.png");
-                }
-            }
-            else
-                Temp = CreateRender(OAMEntry, Palette, Image, 0);
-            Progress?.Report(new ProgressPercent("Writing /BattleSprites/" +  b  + ".png",
-                ((Num*100f) / 257)));
-            Temp.Save(a + ".png");
         }
     }
 }
@@ -453,7 +379,81 @@ namespace RopeSnake.Mother3.Enemy_Graphics
                 GBA.LZ77.Decompress(memblock, PoiCCG + 12, out Image);
                 List<GBA.OAM> OAMEntries = GBA.OAM.OAMGet(memblock, PoiSOB);
                 GBA.PAL[] Palette = GBA.PAL.PALGet(memblock, PoiPAL);
-                Rendering.Compose.Output(OAMEntries, Palette, Image, Enemynum, outputPath, Progress);
+                Output(OAMEntries, Palette, Image, Enemynum, outputPath, Progress);
+            }
+        }
+        public static void Output(List<GBA.OAM> OAMEntry, GBA.PAL[] Palette, byte[] Image, int Num, string outputPath, IProgress<ProgressPercent> Progress)
+        {
+            string a = outputPath;
+            string b = "";
+            if (Num < 10)
+                b += "00";
+            else if (Num < 100)
+            {
+                b += "0";
+                b += ConvertHexToChar(Num / 10);
+            }
+            else
+            {
+                b += ConvertHexToChar(Num / 100);
+                b += ConvertHexToChar((Num / 10) % 10);
+            }
+            b += Num % 10;
+            a += b;
+            Bitmap Temp, Temp2;
+            if ((OAMEntry.Exists(x => x.Num == 1)))
+            {
+                Temp2 = Rendering.Compose.CreateRender(OAMEntry, Palette, Image, 1);
+                Temp = Rendering.Compose.CreateRender(OAMEntry, Palette, Image, 0);
+                if ((Rendering.Compose.CheckSame(Temp, Temp2)) == false)
+                {
+                    Progress?.Report(new ProgressPercent("Writing /BattleSprites/" + b + "Back.png",
+                        ((Num * 100f) / 257)));
+                    Temp2.Save(a + "Back.png");
+                }
+            }
+            else
+                Temp = Rendering.Compose.CreateRender(OAMEntry, Palette, Image, 0);
+            Progress?.Report(new ProgressPercent("Writing /BattleSprites/" + b + ".png",
+                ((Num * 100f) / 257)));
+            Temp.Save(a + ".png");
+        }
+        static char ConvertHexToChar(int a)
+        {
+            switch (a)
+            {
+                case 1:
+                    return '1';
+                case 2:
+                    return '2';
+                case 3:
+                    return '3';
+                case 4:
+                    return '4';
+                case 5:
+                    return '5';
+                case 6:
+                    return '6';
+                case 7:
+                    return '7';
+                case 8:
+                    return '8';
+                case 9:
+                    return '9';
+                case 10:
+                    return 'A';
+                case 11:
+                    return 'B';
+                case 12:
+                    return 'C';
+                case 13:
+                    return 'D';
+                case 14:
+                    return 'E';
+                case 15:
+                    return 'F';
+                default:
+                    return '0';
             }
         }
     }

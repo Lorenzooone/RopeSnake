@@ -123,41 +123,46 @@ namespace GBA
 
             return address - start;
         }
-
-        public static byte[] Compress(byte[] data)
+        public static byte[] Compress(byte[] uncompressed, bool vram)
         {
-            return Compress(data, 0, data.Length);
-        }
+            LinkedList<int>[] lookup = new LinkedList<int>[256];
+            List<byte> Compressed = new List<byte>();
+            for (int i = 0; i < 256; i++)
+                lookup[i] = new LinkedList<int>();
 
-        public static byte[] Compress(byte[] data, int address, int length)
-        {
-            int start = address;
+            int start = 0;
+            int current = 0;
 
-            List<byte> obuf = new List<byte>();
-            List<byte> tbuf = new List<byte>();
+            List<byte> temp = new List<byte>();
             int control = 0;
 
-            // Let's start by encoding the signature and the length
-            obuf.Add(0x10);
-            obuf.Add((byte)(length & 0xFF));
-            obuf.Add((byte)((length >> 8) & 0xFF));
-            obuf.Add((byte)((length >> 16) & 0xFF));
+            // Encode the signature and the length
+            Compressed.Add(0x10);
+            Compressed.Add((byte)(uncompressed.Length & 0xFF));
+            Compressed.Add((byte)((uncompressed.Length >> 8) & 0xFF));
+            Compressed.Add((byte)((uncompressed.Length >> 16) & 0xFF));
 
-            while ((address - start) < length)
+            // VRAM bug: you can't reference the previous byte
+            int distanceStart = vram ? 2 : 1;
+
+            while (current < uncompressed.Length)
             {
-                tbuf.Clear();
+                temp.Clear();
                 control = 0;
+
                 for (int i = 0; i < 8; i++)
                 {
                     bool found = false;
 
                     // First byte should be raw
-                    if (address == start)
+                    if (current == 0)
                     {
-                        tbuf.Add(data[address++]);
+                        byte value = uncompressed[current];
+                        lookup[value].AddFirst(current++);
+                        temp.Add(value);
                         found = true;
                     }
-                    else if ((address - start) >= length)
+                    else if (current >= uncompressed.Length)
                     {
                         break;
                     }
@@ -168,44 +173,54 @@ namespace GBA
                         int max_length = -1;
                         int max_distance = -1;
 
-                        for (int k = 1; k <= 0x1000; k++)
-                        {
-                            if ((address - k) < start) break;
+                        LinkedList<int> possibleAddresses = lookup[uncompressed[current]];
 
+                        foreach (int possible in possibleAddresses)
+                        {
+                            if (current - possible > 0x1000)
+                                break;
+
+                            if (current - possible < distanceStart)
+                                continue;
+
+                            int farthest = Math.Min(18, uncompressed.Length - current + start);
                             int l = 0;
-                            for (; l < 18; l++)
+                            for (; l < farthest; l++)
                             {
-                                if (((address - start + l) >= length) ||
-                                    (data[address - k + l] != data[address + l]))
+                                if (uncompressed[possible + l] != uncompressed[current + l])
                                 {
                                     if (l > max_length)
                                     {
                                         max_length = l;
-                                        max_distance = k;
+                                        max_distance = current - possible;
                                     }
                                     break;
                                 }
                             }
 
-                            // Corner case: we matched all 18 bytes. This is
-                            // the maximum length, so don't bother continuing
-                            if (l == 18)
+                            if (l == farthest)
                             {
-                                max_length = 18;
-                                max_distance = k;
+                                max_length = farthest;
+                                max_distance = current - possible;
                                 break;
                             }
                         }
 
                         if (max_length >= 3)
                         {
-                            address += max_length;
+                            for (int j = 0; j < max_length; j++)
+                            {
+                                byte value = uncompressed[current + j];
+                                lookup[value].AddFirst(current + j);
+                            }
+
+                            current += max_length;
 
                             // We hit a match, so add it to the output
                             int t = (max_distance - 1) & 0xFFF;
                             t |= (((max_length - 3) & 0xF) << 12);
-                            tbuf.Add((byte)((t >> 8) & 0xFF));
-                            tbuf.Add((byte)(t & 0xFF));
+                            temp.Add((byte)((t >> 8) & 0xFF));
+                            temp.Add((byte)(t & 0xFF));
 
                             // Set the control bit
                             control |= (1 << (7 - i));
@@ -217,17 +232,21 @@ namespace GBA
                     if (!found)
                     {
                         // If we didn't find any strings, copy the byte to the output
-                        tbuf.Add(data[address++]);
+                        byte value = uncompressed[current];
+                        lookup[value].AddFirst(current++);
+                        temp.Add(value);
                     }
                 }
 
                 // Flush the temp buffer
-                obuf.Add((byte)(control & 0xFF));
-                obuf.AddRange(tbuf.ToArray());
+                Compressed.Add((byte)(control & 0xFF));
+
+                for (int i = 0; i < temp.Count; i++)
+                    Compressed.Add(temp[i]);
             }
-            while ((obuf.Count() % 4) != 0)
-                obuf.Add(0);
-            return obuf.ToArray();
+            while (Compressed.Count % 4 != 0)
+                Compressed.Add(0);
+            return Compressed.ToArray();
         }
     }
 }
@@ -708,7 +727,7 @@ namespace RopeSnake.Mother3.Enemy_Graphics
             if (Removal[Pos][Removal[Pos].Count - 1].Position + Removal[Pos][Removal[Pos].Count - 1].Size < XSize)
                 Removal[Pos].Add(a);
         }
-        static Byte[,] Finalize(Byte[,] Tile, ref Byte[] SOB, int Tilewidth)
+        static Byte[,] Finalize(Byte[,] Tile, Byte[] SOB, int Tilewidth)
         {
             int a;
             List<List<Byte>> Finalized = new List<List<byte>>();
@@ -2029,7 +2048,7 @@ namespace RopeSnake.Mother3.Enemy_Graphics
                             OAMBack = new Byte[0];
                             SOB = SOBGen(OAMFront, OAMBack, tileheight, tilewidth, tilewidth2, Back);
                         }
-                        OAMTile = Finalize(OAMTile, ref SOB, tilewidth);
+                        OAMTile = Finalize(OAMTile, SOB, tilewidth);
                         OAMTile = checkForSame(OAMTile, SOB);
                         Image = new Byte[OAMTile.Length + 32];
                         for (u = 0; u < OAMTile.Length / 32; u++)
@@ -2042,7 +2061,7 @@ namespace RopeSnake.Mother3.Enemy_Graphics
                             Image[OAMTile.Length + k] = 255;//Prepare the image for CCG compression.
                         }
                         int Tiletemp = Image.Count() / 32;
-                        Image = GBA.LZ77.Compress(Image);
+                        Image = GBA.LZ77.Compress(Image, true);
                         byte[] CCG = new byte[Image.Count() + 16];
                         CCG[0] = 0x63;
                         CCG[1] = 0x63;
@@ -2115,7 +2134,7 @@ namespace RopeSnake.Mother3.Enemy_Graphics
                             byte[] u = new byte[32];
                             for (int h = 0; h < 32; h++)
                                 u[h] = (byte)0;
-                            byte[] i = GBA.LZ77.Compress(u);
+                            byte[] i = GBA.LZ77.Compress(u, true);
                             byte[] CCG = new byte[i.Length + 16];
                             CCG[0] = 0x63;
                             CCG[1] = 0x63;
