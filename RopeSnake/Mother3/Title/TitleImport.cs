@@ -7,134 +7,6 @@ using System.Threading.Tasks;
 //Frame related: 0x805792C Frames, 0x8057FFC Fading 0x8058128
 namespace RopeSnake.Mother3.Title
 {
-    class Test
-    {
-        public static byte[] WriteCompressed(byte[] uncompressed, bool vram)
-        {
-            LinkedList<int>[] lookup = new LinkedList<int>[256];
-            List<byte> Compressed=new List<byte>();
-            for (int i = 0; i < 256; i++)
-                lookup[i] = new LinkedList<int>();
-
-            int start = 0;
-            int current = 0;
-
-            List<byte> temp = new List<byte>();
-            int control = 0;
-
-            // Encode the signature and the length
-            Compressed.Add(0x10);
-            Compressed.Add((byte)(uncompressed.Length & 0xFF));
-            Compressed.Add((byte)((uncompressed.Length >> 8) & 0xFF));
-            Compressed.Add((byte)((uncompressed.Length >> 16) & 0xFF));
-
-            // VRAM bug: you can't reference the previous byte
-            int distanceStart = vram ? 2 : 1;
-
-            while (current < uncompressed.Length)
-            {
-                temp.Clear();
-                control = 0;
-
-                for (int i = 0; i < 8; i++)
-                {
-                    bool found = false;
-
-                    // First byte should be raw
-                    if (current == 0)
-                    {
-                        byte value = uncompressed[current];
-                        lookup[value].AddFirst(current++);
-                        temp.Add(value);
-                        found = true;
-                    }
-                    else if (current >= uncompressed.Length)
-                    {
-                        break;
-                    }
-                    else
-                    {
-                        // We're looking for the longest possible string
-                        // The farthest possible distance from the current address is 0x1000
-                        int max_length = -1;
-                        int max_distance = -1;
-
-                        LinkedList<int> possibleAddresses = lookup[uncompressed[current]];
-
-                        foreach (int possible in possibleAddresses)
-                        {
-                            if (current - possible > 0x1000)
-                                break;
-
-                            if (current - possible < distanceStart)
-                                continue;
-
-                            int farthest = Math.Min(18, uncompressed.Length - current + start);
-                            int l = 0;
-                            for (; l < farthest; l++)
-                            {
-                                if (uncompressed[possible + l] != uncompressed[current + l])
-                                {
-                                    if (l > max_length)
-                                    {
-                                        max_length = l;
-                                        max_distance = current - possible;
-                                    }
-                                    break;
-                                }
-                            }
-
-                            if (l == farthest)
-                            {
-                                max_length = farthest;
-                                max_distance = current - possible;
-                                break;
-                            }
-                        }
-
-                        if (max_length >= 3)
-                        {
-                            for (int j = 0; j < max_length; j++)
-                            {
-                                byte value = uncompressed[current + j];
-                                lookup[value].AddFirst(current + j);
-                            }
-
-                            current += max_length;
-
-                            // We hit a match, so add it to the output
-                            int t = (max_distance - 1) & 0xFFF;
-                            t |= (((max_length - 3) & 0xF) << 12);
-                            temp.Add((byte)((t >> 8) & 0xFF));
-                            temp.Add((byte)(t & 0xFF));
-
-                            // Set the control bit
-                            control |= (1 << (7 - i));
-
-                            found = true;
-                        }
-                    }
-
-                    if (!found)
-                    {
-                        // If we didn't find any strings, copy the byte to the output
-                        byte value = uncompressed[current];
-                        lookup[value].AddFirst(current++);
-                        temp.Add(value);
-                    }
-                }
-
-                // Flush the temp buffer
-                Compressed.Add((byte)(control & 0xFF));
-
-                for (int i = 0; i < temp.Count; i++)
-                    Compressed.Add(temp[i]);
-            }
-            while (Compressed.Count % 4 != 0)
-                Compressed.Add(0);
-            return Compressed.ToArray();
-        }
-    }
     class TitleImport
     {
         static int ClosestSpace(List<int[]> Space, byte[] PAL, byte[]Temp, int num)
@@ -720,7 +592,7 @@ namespace RopeSnake.Mother3.Title
             List<byte[]> finalProducts = new List<byte[]>();
             byte[] MenuPalettes = PALGet(Menu_Options_Palette);
             List<byte>[] OAMEntries = new List<byte>[Menu_Options.Count];
-            Byte[] FinalGraphicsProduct = Test.WriteCompressed(Generate_OAM_Graphics_Palette(Menu_Options, Positions, OAMEntries, MenuPalettes, true), true);
+            Byte[] FinalGraphicsProduct = Gba.GbaExtensions.WriteCompressed(Generate_OAM_Graphics_Palette(Menu_Options, Positions, OAMEntries, MenuPalettes, true), true);
             byte[] FinalOAMProduct = buildOAM(OAMEntries, OAMRemains, true, true);
             finalProducts.Add(FinalGraphicsProduct);
             finalProducts.Add(MenuPalettes);
@@ -771,7 +643,7 @@ namespace RopeSnake.Mother3.Title
             byte[] ArrangementStatic = TitleExec(Logo[4], TitleStatic, LogoPalettes, 0x800);
             LogoPalettes[0] = 0;
             LogoPalettes[1] = 0;
-            Product.Add(Test.WriteCompressed(TitleStatic.ToArray(), true));
+            Product.Add(Gba.GbaExtensions.WriteCompressed(TitleStatic.ToArray(), true));
             Product.Add(LogoPalettes);
             Product.Add(ArrangementStatic);
             LogoPalettes = new byte[0x200];
@@ -819,7 +691,7 @@ namespace RopeSnake.Mother3.Title
             //Press a button graphic
             List<byte> OAMEntry = new List<byte>();
             setPalettes(MainPalette, false);
-            byte[] Press_Graphics = Test.WriteCompressed(Generate_OAM_Graphics_Palette(Health[1], Position, ref OAMEntry, MainPalette, false), true);
+            byte[] Press_Graphics = Gba.GbaExtensions.WriteCompressed(Generate_OAM_Graphics_Palette(Health[1], Position, ref OAMEntry, MainPalette, false), true);
             byte[] Press_OAM = buildOAM(new List<byte>[] { OAMEntry }, new List<byte[]> { OAMRemains }, false, true);
 
             //Health graphic
@@ -830,8 +702,8 @@ namespace RopeSnake.Mother3.Title
             byte[] MainGraphics = new byte[length];
             for (int i = 0; i < length; i++)
                 MainGraphics[i] = MainGraphicsBuffer[i];
-            MainGraphics = Test.WriteCompressed(MainGraphics, true);
-            MainArrangements = Test.WriteCompressed(MainArrangements, true);
+            MainGraphics = Gba.GbaExtensions.WriteCompressed(MainGraphics, true);
+            MainArrangements = Gba.GbaExtensions.WriteCompressed(MainArrangements, true);
 
             //Ending
             List<byte[]> Products = new List<byte[]>();
@@ -868,7 +740,7 @@ namespace RopeSnake.Mother3.Title
             //Ending
             List<byte[]> Products = new List<byte[]>();
             Products.Add(DisclaimerPalette);
-            Products.Add(Test.WriteCompressed(DisclaimerExec(Disclaimer, DisclaimerPalette), true));
+            Products.Add(Gba.GbaExtensions.WriteCompressed(DisclaimerExec(Disclaimer, DisclaimerPalette), true));
             return Products;
         }
     }

@@ -86,6 +86,132 @@ namespace RopeSnake.Gba
             return decompressed;
         }
 
+        public static byte[] WriteCompressed(byte[] uncompressed, bool vram)
+        {
+            LinkedList<int>[] lookup = new LinkedList<int>[256];
+            List<byte> Compressed = new List<byte>();
+            for (int i = 0; i < 256; i++)
+                lookup[i] = new LinkedList<int>();
+
+            int start = 0;
+            int current = 0;
+
+            List<byte> temp = new List<byte>();
+            int control = 0;
+
+            // Encode the signature and the length
+            Compressed.Add(0x10);
+            Compressed.Add((byte)(uncompressed.Length & 0xFF));
+            Compressed.Add((byte)((uncompressed.Length >> 8) & 0xFF));
+            Compressed.Add((byte)((uncompressed.Length >> 16) & 0xFF));
+
+            // VRAM bug: you can't reference the previous byte
+            int distanceStart = vram ? 2 : 1;
+
+            while (current < uncompressed.Length)
+            {
+                temp.Clear();
+                control = 0;
+
+                for (int i = 0; i < 8; i++)
+                {
+                    bool found = false;
+
+                    // First byte should be raw
+                    if (current == 0)
+                    {
+                        byte value = uncompressed[current];
+                        lookup[value].AddFirst(current++);
+                        temp.Add(value);
+                        found = true;
+                    }
+                    else if (current >= uncompressed.Length)
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        // We're looking for the longest possible string
+                        // The farthest possible distance from the current address is 0x1000
+                        int max_length = -1;
+                        int max_distance = -1;
+
+                        LinkedList<int> possibleAddresses = lookup[uncompressed[current]];
+
+                        foreach (int possible in possibleAddresses)
+                        {
+                            if (current - possible > 0x1000)
+                                break;
+
+                            if (current - possible < distanceStart)
+                                continue;
+
+                            int farthest = Math.Min(18, uncompressed.Length - current + start);
+                            int l = 0;
+                            for (; l < farthest; l++)
+                            {
+                                if (uncompressed[possible + l] != uncompressed[current + l])
+                                {
+                                    if (l > max_length)
+                                    {
+                                        max_length = l;
+                                        max_distance = current - possible;
+                                    }
+                                    break;
+                                }
+                            }
+
+                            if (l == farthest)
+                            {
+                                max_length = farthest;
+                                max_distance = current - possible;
+                                break;
+                            }
+                        }
+
+                        if (max_length >= 3)
+                        {
+                            for (int j = 0; j < max_length; j++)
+                            {
+                                byte value = uncompressed[current + j];
+                                lookup[value].AddFirst(current + j);
+                            }
+
+                            current += max_length;
+
+                            // We hit a match, so add it to the output
+                            int t = (max_distance - 1) & 0xFFF;
+                            t |= (((max_length - 3) & 0xF) << 12);
+                            temp.Add((byte)((t >> 8) & 0xFF));
+                            temp.Add((byte)(t & 0xFF));
+
+                            // Set the control bit
+                            control |= (1 << (7 - i));
+
+                            found = true;
+                        }
+                    }
+
+                    if (!found)
+                    {
+                        // If we didn't find any strings, copy the byte to the output
+                        byte value = uncompressed[current];
+                        lookup[value].AddFirst(current++);
+                        temp.Add(value);
+                    }
+                }
+
+                // Flush the temp buffer
+                Compressed.Add((byte)(control & 0xFF));
+
+                for (int i = 0; i < temp.Count; i++)
+                    Compressed.Add(temp[i]);
+            }
+            while (Compressed.Count % 4 != 0)
+                Compressed.Add(0);
+            return Compressed.ToArray();
+        }
+
         public static int WriteCompressed(this BinaryStream stream, Block uncompressed, int count, bool vram)
         {
             LinkedList<int>[] lookup = new LinkedList<int>[256];

@@ -257,12 +257,6 @@ namespace RopeSnake.Mother3.Enemy_Graphics
             }
             return -1;
         }
-        static int Absolute(int a)
-        {
-            if (a < 0)
-                a = -a;
-            return a;
-        }
         static bool AreColoursSame(Color a, Color b)
         {
             if (a.R != b.R)
@@ -400,10 +394,10 @@ namespace RopeSnake.Mother3.Enemy_Graphics
                                         for (int d = 0; d < FinalColors.Count; d++)
                                         {
                                             Similar[d] = 0;
-                                                Similar[d] += 1000 * Absolute(FinalColors[d].A - pixel.A);
-                                                Similar[d] += Absolute(FinalColors[d].B - pixel.B);
-                                                Similar[d] += Absolute(FinalColors[d].G - pixel.G);
-                                                Similar[d] += Absolute(FinalColors[d].R - pixel.R);
+                                                Similar[d] += 1000 * Math.Abs(FinalColors[d].A - pixel.A);
+                                                Similar[d] += Math.Abs(FinalColors[d].B - pixel.B);
+                                                Similar[d] += Math.Abs(FinalColors[d].G - pixel.G);
+                                                Similar[d] += Math.Abs(FinalColors[d].R - pixel.R);
                                         }
                                         int e = 1000000000;
                                         int MostSimilar = 0;
