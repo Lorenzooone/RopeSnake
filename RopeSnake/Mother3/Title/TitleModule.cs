@@ -259,15 +259,18 @@ namespace RopeSnake.Mother3.Title
                 romData.Data[baseGBAArrangementAddress + i] = GBA_Final[2][i];
 
             //Disclaimer data
-            List<byte[]> Disclaimer_Final = TitleImport.DisclaimerImport(Disclaimer);
-            int baseDisclaimerPaletteAddress = RomConfig.GetOffset(DisclaimerPaletteKey, romData);
-            int baseDisclaimerGraphicsAddress = TitleEnd;
-            TitleEnd += Disclaimer_Final[1].Length;
-            UpdateRomReferences(romData, DisclaimerGraphicsKey, baseDisclaimerGraphicsAddress);
-            for (int i = 0; i < Disclaimer_Final[0].Length; i++)
-                romData.Data[baseDisclaimerPaletteAddress + i] = Disclaimer_Final[0][i];
-            for (int i = 0; i < Disclaimer_Final[1].Length; i++)
-                romData.Data[baseDisclaimerGraphicsAddress + i] = Disclaimer_Final[1][i];
+            if (RomConfig.IsEnglish)
+            {
+                List<byte[]> Disclaimer_Final = TitleImport.DisclaimerImport(Disclaimer);
+                int baseDisclaimerPaletteAddress = RomConfig.GetOffset(DisclaimerPaletteKey, romData);
+                int baseDisclaimerGraphicsAddress = TitleEnd;
+                TitleEnd += Disclaimer_Final[1].Length;
+                UpdateRomReferences(romData, DisclaimerGraphicsKey, baseDisclaimerGraphicsAddress);
+                for (int i = 0; i < Disclaimer_Final[0].Length; i++)
+                    romData.Data[baseDisclaimerPaletteAddress + i] = Disclaimer_Final[0][i];
+                for (int i = 0; i < Disclaimer_Final[1].Length; i++)
+                    romData.Data[baseDisclaimerGraphicsAddress + i] = Disclaimer_Final[1][i];
+            }
 
             //Pause frames between the logo animation frames
             if ((Framesi.PauseFrames >= 8)||(Framesi.PauseFrames<0))
