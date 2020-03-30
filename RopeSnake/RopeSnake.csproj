@@ -161,6 +161,7 @@
     <Compile Include="Mother3\Title\TitleImport.cs" />
     <Compile Include="Mother3\Title\TitleExport.cs" />
     <Compile Include="Mother3\Title\TitleModule.cs" />
+    <Compile Include="Mother3\Title\TitleSettings.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

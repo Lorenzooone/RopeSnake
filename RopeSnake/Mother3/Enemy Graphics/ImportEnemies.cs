@@ -123,6 +123,43 @@ namespace GBA
 
             return address - start;
         }
+        public static int getLength(byte[] data, int address)
+        {
+            int start = address;
+
+            if (data[address++] != 0x10) return -1; // Check for LZ77 signature
+
+            // Read the block length
+            int length = data[address++];
+            length += (data[address++] << 8);
+            length += (data[address++] << 16);
+
+            int bPos = 0;
+            while (bPos < length)
+            {
+                byte ch = data[address++];
+                for (int i = 0; i < 8; i++)
+                {
+                    switch ((ch >> (7 - i)) & 1)
+                    {
+                        case 0:
+                            // Direct copy
+                            if (bPos >= length) break;
+                            address++;
+                            bPos++;
+                            break;
+                        default:
+                            // Compression magic
+                            int t = data[address++];
+                            address++;
+                            int n = ((t >> 4) & 0xF) + 3;    // Number of bytes to copy
+                            bPos += n;
+                            break;
+                    }
+                }
+            }
+            return address - start;
+        }
         public static byte[] Compress(byte[] uncompressed, bool vram)
         {
             LinkedList<int>[] lookup = new LinkedList<int>[256];
@@ -1940,268 +1977,190 @@ namespace RopeSnake.Mother3.Enemy_Graphics
             int LastCCG = (memblock[FreeSpace.Pointers.BaseCCG]) + (memblock[FreeSpace.Pointers.BaseCCG + 1] << 8) + (memblock[FreeSpace.Pointers.BaseCCG + 2] << 16) + (memblock[FreeSpace.Pointers.BaseCCG + 3] << 24) + FreeSpace.Pointers.Base;
             int LastSOB = (memblock[FreeSpace.Pointers.BaseSOB]) + (memblock[FreeSpace.Pointers.BaseSOB + 1] << 8) + (memblock[FreeSpace.Pointers.BaseSOB + 2] << 16) + (memblock[FreeSpace.Pointers.BaseSOB + 3] << 24) + FreeSpace.Pointers.Base;
             const int EndingSOB= 0x1CFFD98;
-            FreeSpace.Pointers.Removal(memblock);
             List<FinalProducts> End = new List<FinalProducts>();
-            int Num = -1;
-            while (Num <= 256)
+            for (int Num = 0; Num <= 256; Num++)
             {
-                Num += 1;
-                for (; Num <= 256; Num++)
+                string Put = "";
+                string Path = OutputO + "\\BattleSprites\\";
+                if (Num < 10)
+                    Put += "00";
+                else if (Num < 100)
                 {
-                    string Put="";
-                    string Path = OutputO+"\\BattleSprites\\";
-                    if (Num < 10)
-                        Put += "00";
-                    else if (Num < 100)
+                    Put += "0";
+                    Put += ConvertHexToChar(Num / 10);
+                }
+                else
+                {
+                    Put += ConvertHexToChar(Num / 100);
+                    Put += ConvertHexToChar((Num / 10) % 10);
+                }
+                Put += Num % 10;
+                Path += Put;
+                progress?.Report(new ProgressPercent("Reading Enemy " + Num + "'s Graphics",
+                    ((Num * 100f) / 257)));
+                if (System.IO.File.Exists(Path + ".png"))
+                {
+                    int Back = 0, Enemynum = Num;
+                    if (System.IO.File.Exists(Path + "Back.png"))
+                        Back = 1;
+                    int k = 0, u = 0;
+                    bool IsHFlip = false, IsBackHFlip = false;
+                    int restFront = 0, restBack = 0;
+                    Bitmap img = new Bitmap(Path + ".png");
+                    int Backheight = img.Height;
+                    int tileheight = 0, tilewidth = 0;
+                    byte[] PALette;
+                    IsHFlip = CheckIfHFlipStart(img);
+                    restFront = img.Width % 2;
+                    if (IsHFlip)
+                        img = ChangeIfHFlipStart(img);
+                    if (Back == 1)
                     {
-                        Put += "0";
-                        Put += ConvertHexToChar(Num / 10);
+                        Bitmap img2 = new Bitmap(Path + "Back.png");
+                        IsBackHFlip = CheckIfHFlipStart(img2);
+                        restBack = img2.Width % 2;
+                        if (IsBackHFlip)
+                            img2 = ChangeIfHFlipStart(img2);
+                        img = MergeTwo32ArgbFrontBack(img, img2);
                     }
-                    else
+                    Byte[] Image = ConvertImgTo4bpp(img, Backheight, ref tilewidth, ref tileheight, out PALette).ToArray();
+                    Byte[,] Tile = new Byte[((Image.Count()) / 32), 32];
+                    for (u = 0; u < ((Image.Count()) / 32); u++)
                     {
-                        Put += ConvertHexToChar(Num / 100);
-                        Put += ConvertHexToChar((Num / 10) % 10);
+                        for (int j = 0; j < 32; j++)
+                        {
+                            Tile[u, j] = Image[(u * 32) + j];
+                            //if(Tile[u,j]<=15)
+                            //Console.Write("0"); Testing purpose.
+                            //Console.Write("{0:X}|",Tile[u, j]);
+                        }
+                        //Console.WriteLine("");
                     }
-                    Put += Num % 10;
-                    Path += Put;
-                    progress?.Report(new ProgressPercent("Reading Enemy " + Num + "'s Graphics",
-                        ((Num * 100f) / 257)));
-                    if (System.IO.File.Exists(Path + ".png"))
+                    byte[,] NewTile = Tile;
+                    if (tileheight > 1)
+                        NewTile = RemoveExceedingTiles(Tile, tilewidth, tileheight, ref Backheight, out tilewidth, out tileheight);
+                    Byte[,] Tileback, OAMTile = new Byte[1, 1];
+                    Byte[] OAMFront, OAMBack, SOB = new Byte[1];
+                    int tilewidth1 = tilewidth;
+                    int tileheight1 = 0;
+                    int tilewidth2 = tilewidth;
+                    int tileheight2 = 0;
+                    int tileheight1temp = tileheight;
+                    int tileheight2temp = tileheight;
+                    int Tiletemph = tileheight;
+                    int Tiletempw = tilewidth;
+                    if ((Back == 1))
                     {
-                        int Back = 0, Enemynum = Num;
-                        if (System.IO.File.Exists(Path + "Back.png"))
-                            Back = 1;
-                        int k = 0, u = 0;
-                        bool IsHFlip=false, IsBackHFlip=false;
-                        int restFront = 0, restBack = 0;
-                        Bitmap img = new Bitmap(Path + ".png");
-                        int Backheight = img.Height;
-                        int tileheight = 0, tilewidth = 0;
-                        byte[] PALette;
-                        IsHFlip = CheckIfHFlipStart(img);
-                        restFront = img.Width % 2;
-                        if (IsHFlip)
-                            img = ChangeIfHFlipStart(img);
-                        if (Back == 1)
+                        NewTile = SeparateBack(NewTile, tilewidth, tileheight, Back, Backheight, out tileheight1, out tileheight2, out Tileback);
+                        NewTile = RemoveExceedingTiles(NewTile, tilewidth, tileheight1, ref Backheight, out tilewidth1, out tileheight1);
+                        if (tileheight2 > 0)
                         {
-                            Bitmap img2 = new Bitmap(Path + "Back.png");
-                            IsBackHFlip = CheckIfHFlipStart(img2);
-                            restBack = img2.Width % 2;
-                            if (IsBackHFlip)
-                                img2 = ChangeIfHFlipStart(img2);
-                            img = MergeTwo32ArgbFrontBack(img, img2);
-                        }
-                        Byte[] Image = ConvertImgTo4bpp(img, Backheight, ref tilewidth, ref tileheight, out PALette).ToArray();
-                        Byte[,] Tile = new Byte[((Image.Count()) / 32), 32];
-                        for (u = 0; u < ((Image.Count()) / 32); u++)
-                        {
-                            for (int j = 0; j < 32; j++)
+                            Tileback = RemoveExceedingTiles(Tileback, tilewidth2, tileheight2, ref Backheight, out tilewidth2, out tileheight2);
+                            if (!BackFront(NewTile, Tileback, tileheight1, tileheight2, tilewidth1, tilewidth2))
                             {
-                                Tile[u, j] = Image[(u * 32) + j];
-                                //if(Tile[u,j]<=15)
-                                //Console.Write("0"); Testing purpose.
-                                //Console.Write("{0:X}|",Tile[u, j]);
-                            }
-                            //Console.WriteLine("");
-                        }
-                        byte[,] NewTile = Tile;
-                        if (tileheight > 1)
-                            NewTile = RemoveExceedingTiles(Tile, tilewidth, tileheight, ref Backheight, out tilewidth, out tileheight);
-                        Byte[,] Tileback, OAMTile = new Byte[1, 1];
-                        Byte[] OAMFront, OAMBack, SOB = new Byte[1];
-                        int tilewidth1 = tilewidth;
-                        int tileheight1 = 0;
-                        int tilewidth2 = tilewidth;
-                        int tileheight2 = 0;
-                        int tileheight1temp = tileheight;
-                        int tileheight2temp = tileheight;
-                        int Tiletemph = tileheight;
-                        int Tiletempw = tilewidth;
-                        if ((Back == 1))
-                        {
-                            NewTile = SeparateBack(NewTile, tilewidth, tileheight, Back, Backheight, out tileheight1, out tileheight2, out Tileback);
-                            NewTile = RemoveExceedingTiles(NewTile, tilewidth, tileheight1, ref Backheight, out tilewidth1, out tileheight1);
-                            if (tileheight2 > 0)
-                            {
-                                Tileback = RemoveExceedingTiles(Tileback, tilewidth2, tileheight2, ref Backheight, out tilewidth2, out tileheight2);
-                                if (!BackFront(NewTile, Tileback, tileheight1, tileheight2, tilewidth1, tilewidth2))
-                                {
-                                    tileheight1temp = tileheight1;
-                                    tileheight2temp = tileheight2;
-                                    OAMTile = TileOAM(NewTile, tileheight1, tilewidth1, out tileheight1, out tilewidth1, out OAMFront, IsHFlip);
-                                    Tileback = TileOAM(Tileback, tileheight2, tilewidth2, out tileheight2, out tilewidth2, out OAMBack, IsBackHFlip);
-                                    OAMTile = UniteTile(OAMTile, Tileback, Back, tilewidth1, tileheight1, tilewidth2, tileheight2, ref OAMFront, ref OAMBack, out tilewidth, out tileheight);
-                                    OAMFront=OAMFixHFlip(OAMFront, IsHFlip, restFront);
-                                    OAMBack = OAMFixHFlip(OAMBack, IsBackHFlip, restBack);
-                                    SOB = SOBGen(OAMFront, OAMBack, tileheight1, tilewidth1, tilewidth2, Back);
-                                }
-                                else
-                                    Back = 0;
+                                tileheight1temp = tileheight1;
+                                tileheight2temp = tileheight2;
+                                OAMTile = TileOAM(NewTile, tileheight1, tilewidth1, out tileheight1, out tilewidth1, out OAMFront, IsHFlip);
+                                Tileback = TileOAM(Tileback, tileheight2, tilewidth2, out tileheight2, out tilewidth2, out OAMBack, IsBackHFlip);
+                                OAMTile = UniteTile(OAMTile, Tileback, Back, tilewidth1, tileheight1, tilewidth2, tileheight2, ref OAMFront, ref OAMBack, out tilewidth, out tileheight);
+                                OAMFront = OAMFixHFlip(OAMFront, IsHFlip, restFront);
+                                OAMBack = OAMFixHFlip(OAMBack, IsBackHFlip, restBack);
+                                SOB = SOBGen(OAMFront, OAMBack, tileheight1, tilewidth1, tilewidth2, Back);
                             }
                             else
                                 Back = 0;
                         }
-                        if (Back == 0)
-                        {
-                            OAMTile = TileOAM(NewTile, tileheight, tilewidth, out tileheight, out tilewidth, out OAMFront, IsHFlip);
-                            OAMFront = OAMFixHFlip(OAMFront, IsHFlip, restFront);
-                            OAMBack = new Byte[0];
-                            SOB = SOBGen(OAMFront, OAMBack, tileheight, tilewidth, tilewidth2, Back);
-                        }
-                        OAMTile = Finalize(OAMTile, SOB, tilewidth);
-                        OAMTile = checkForSame(OAMTile, SOB);
-                        Image = new Byte[OAMTile.Length + 32];
-                        for (u = 0; u < OAMTile.Length / 32; u++)
-                        {
-                            for (k = 0; k < 32; k++)
-                                Image[(u * 32) + k] = OAMTile[u, k];
-                        }
-                        for (k = 0; k <= 31; k++)
-                        {
-                            Image[OAMTile.Length + k] = 255;//Prepare the image for CCG compression.
-                        }
-                        int Tiletemp = Image.Count() / 32;
-                        Image = GBA.LZ77.Compress(Image, true);
-                        byte[] CCG = new byte[Image.Count() + 16];
-                        CCG[0] = 0x63;
-                        CCG[1] = 0x63;
-                        CCG[2] = 0x67;
-                        CCG[3] = 0x20;
-                        CCG[4] = 0x2;
-                        CCG[5] = 0;
-                        CCG[6] = 0;
-                        CCG[7] = 0;
-                        CCG[8] = ((byte)(Tiletemp & 0xFF));
-                        CCG[9] = ((byte)((Tiletemp >> 8) & 0xFF));
-                        CCG[10] = ((byte)((Tiletemp >> 16) & 0xFF));
-                        CCG[11] = ((byte)((Tiletemp >> 24) & 0xFF));
-                        for (int o = 0; o < Image.Count(); o++)
-                            CCG[o + 12] = Image[o];
-                        CCG[Image.Count() + 12] = 0x7E;
-                        CCG[Image.Count() + 13] = 0x63;
-                        CCG[Image.Count() + 14] = 0x63;
-                        CCG[Image.Count() + 15] = 0x67;
-                        int Enemytable = 0xD0D28; //If it has a back sprite, make it turnable in battle and in memo. I'll leave this commented since this should be in the EnemyData.
-                                                  /*if (Back >= 1)
-                                                  {
-                                                      memblock[Enemytable + (Enemynum * 0x90) + 0x74] = 1;
-                                                      memblock[Enemytable + (Enemynum * 0x90) + 0x75] = 1;
-                                                  }
-                                                  else
-                                                  {
-                                                      memblock[Enemytable + (Enemynum * 0x90) + 0x74] = 0;
-                                                      memblock[Enemytable + (Enemynum * 0x90) + 0x75] = 0;
-                                                  }*/
-                        memblock[Enemytable + (Enemynum * 0x90) + 0x6C] = 1;//Fix the heights, so we avoid problems.
-                                                                            //I suggest making an algorythm that edits the value at "0xC6D62 + (Enemynum * 2)" based on the number of initial breaks in Memo entries. This value will be then used by my algorythm to make everything look pretty.
-                        if (memblock[0xC6D62 + (Enemynum * 2)] >= 128)
-                        {
-                            memblock[Enemytable + (Enemynum * 0x90) + 0x70] = (byte)(36 - ((tileheight1temp << 3) / 2) + (256 - ((256 - memblock[0xC6D62 + (Enemynum * 2)]) / 2)));
-                            memblock[Enemytable + (Enemynum * 0x90) + 0x71] = (byte)(36 - ((tileheight2temp << 3) / 2) + (256 - ((256 - memblock[0xC6D62 + (Enemynum * 2)]) / 2)));
-                        }
                         else
-                        {
-                            memblock[Enemytable + (Enemynum * 0x90) + 0x70] = (byte)(36 - ((tileheight1temp << 3) / 2) + (memblock[0xC6D62 + (Enemynum * 2)] / 2));
-                            memblock[Enemytable + (Enemynum * 0x90) + 0x71] = (byte)(36 - ((tileheight2temp << 3) / 2) + (memblock[0xC6D62 + (Enemynum * 2)] / 2));
-                        }
-                        if (tileheight1temp >= 12)
-                            memblock[Enemytable + (Enemynum * 0x90) + 0x72] = (byte)(256 - (((tileheight1temp - 12) << 3) / 2));
-                        else
-                            memblock[Enemytable + (Enemynum * 0x90) + 0x72] = 0;
-                        if (tileheight2temp >= 12)
-                            memblock[Enemytable + (Enemynum * 0x90) + 0x73] = (byte)(256 - (((tileheight2temp - 12) << 3) / 2));
-                        else
-                            memblock[Enemytable + (Enemynum * 0x90) + 0x73] = 0;
-                        FinalProducts a = new FinalProducts();
-                        a.CCG = CCG;
-                        a.SOB = SOB;
-                        a.Palette = PALette;
-                        End.Add(a);
+                            Back = 0;
+                    }
+                    if (Back == 0)
+                    {
+                        OAMTile = TileOAM(NewTile, tileheight, tilewidth, out tileheight, out tilewidth, out OAMFront, IsHFlip);
+                        OAMFront = OAMFixHFlip(OAMFront, IsHFlip, restFront);
+                        OAMBack = new Byte[0];
+                        SOB = SOBGen(OAMFront, OAMBack, tileheight, tilewidth, tilewidth2, Back);
+                    }
+                    OAMTile = Finalize(OAMTile, SOB, tilewidth);
+                    OAMTile = checkForSame(OAMTile, SOB);
+                    Image = new Byte[OAMTile.Length + 32];
+                    for (u = 0; u < OAMTile.Length / 32; u++)
+                    {
+                        for (k = 0; k < 32; k++)
+                            Image[(u * 32) + k] = OAMTile[u, k];
+                    }
+                    for (k = 0; k <= 31; k++)
+                    {
+                        Image[OAMTile.Length + k] = 255;//Prepare the image for CCG compression.
+                    }
+                    int Tiletemp = Image.Count() / 32;
+                    Image = GBA.LZ77.Compress(Image, true);
+                    byte[] CCG = new byte[Image.Count() + 16];
+                    CCG[0] = 0x63;
+                    CCG[1] = 0x63;
+                    CCG[2] = 0x67;
+                    CCG[3] = 0x20;
+                    CCG[4] = 0x2;
+                    CCG[5] = 0;
+                    CCG[6] = 0;
+                    CCG[7] = 0;
+                    CCG[8] = ((byte)(Tiletemp & 0xFF));
+                    CCG[9] = ((byte)((Tiletemp >> 8) & 0xFF));
+                    CCG[10] = ((byte)((Tiletemp >> 16) & 0xFF));
+                    CCG[11] = ((byte)((Tiletemp >> 24) & 0xFF));
+                    for (int o = 0; o < Image.Count(); o++)
+                        CCG[o + 12] = Image[o];
+                    CCG[Image.Count() + 12] = 0x7E;
+                    CCG[Image.Count() + 13] = 0x63;
+                    CCG[Image.Count() + 14] = 0x63;
+                    CCG[Image.Count() + 15] = 0x67;
+                    int Enemytable = 0xD0D28; //If it has a back sprite, make it turnable in battle and in memo. I'll leave this commented since this should be in the EnemyData.
+                                              /*if (Back >= 1)
+                                              {
+                                                  memblock[Enemytable + (Enemynum * 0x90) + 0x74] = 1;
+                                                  memblock[Enemytable + (Enemynum * 0x90) + 0x75] = 1;
+                                              }
+                                              else
+                                              {
+                                                  memblock[Enemytable + (Enemynum * 0x90) + 0x74] = 0;
+                                                  memblock[Enemytable + (Enemynum * 0x90) + 0x75] = 0;
+                                              }*/
+                    memblock[Enemytable + (Enemynum * 0x90) + 0x6C] = 1;//Fix the heights, so we avoid problems.
+                                                                        //I suggest making an algorythm that edits the value at "0xC6D62 + (Enemynum * 2)" based on the number of initial breaks in Memo entries. This value will be then used by my algorythm to make everything look pretty.
+                    if (memblock[0xC6D62 + (Enemynum * 2)] >= 128)
+                    {
+                        memblock[Enemytable + (Enemynum * 0x90) + 0x70] = (byte)(36 - ((tileheight1temp << 3) / 2) + (256 - ((256 - memblock[0xC6D62 + (Enemynum * 2)]) / 2)));
+                        memblock[Enemytable + (Enemynum * 0x90) + 0x71] = (byte)(36 - ((tileheight2temp << 3) / 2) + (256 - ((256 - memblock[0xC6D62 + (Enemynum * 2)]) / 2)));
                     }
                     else
                     {
-                        if (Num != 0)
-                        {
-                            FinalProducts a = new FinalProducts();
-                            a.CCG = End[0].CCG;
-                            a.SOB = End[0].SOB;
-                            a.Palette = End[0].Palette;
-                            End.Add(a);
-                        }
-                        else
-                        {
-                            FinalProducts a = new FinalProducts();
-                            byte[] u = new byte[32];
-                            for (int h = 0; h < 32; h++)
-                                u[h] = (byte)0;
-                            byte[] i = GBA.LZ77.Compress(u, true);
-                            byte[] CCG = new byte[i.Length + 16];
-                            CCG[0] = 0x63;
-                            CCG[1] = 0x63;
-                            CCG[2] = 0x67;
-                            CCG[3] = 0x20;
-                            CCG[4] = 0x2;
-                            CCG[5] = 0;
-                            CCG[6] = 0;
-                            CCG[7] = 0;
-                            CCG[8] = 1;
-                            CCG[9] = 0;
-                            CCG[10] = 0;
-                            CCG[11] = 0;
-                            for (int o = 0; o < i.Length; o++)
-                                CCG[o + 12] = i[o];
-                            CCG[i.Length + 12] = 0x7E;
-                            CCG[i.Length + 13] = 0x63;
-                            CCG[i.Length + 14] = 0x63;
-                            CCG[i.Length + 15] = 0x67;
-                            a.CCG = CCG;
-                            List<byte> SOB = new List<byte>();
-                            SOB.Add(0x73);
-                            SOB.Add(0x6F);
-                            SOB.Add(0x62);
-                            SOB.Add(0x20);
-                            SOB.Add(2);
-                            SOB.Add(0);
-                            SOB.Add(2);
-                            SOB.Add(0);
-                            SOB.Add(0x10);
-                            SOB.Add(0);
-                            SOB.Add(0x10);
-                            SOB.Add(0);
-                            SOB.Add((Byte)(0x14 + 8));
-                            SOB.Add(0);
-                            SOB.Add((Byte)(0x14 + 8));
-                            SOB.Add(0);
-                            SOB.Add(1);
-                            SOB.Add(0);
-                            SOB.Add(0);
-                            SOB.Add(0);
-                            SOB.Add(0);
-                            SOB.Add(0);
-                            SOB.Add(0);
-                            SOB.Add(0);
-                            SOB.Add(0);
-                            SOB.Add(0);
-                            SOB.Add(0);
-                            SOB.Add(4);
-                            SOB.Add(0);
-                            SOB.Add(1);
-                            SOB.Add(0);
-                            SOB.Add(0);
-                            SOB.Add(0);
-                            SOB.Add(0);
-                            SOB.Add(0);
-                            SOB.Add(0x7E);
-                            SOB.Add(0x73);
-                            SOB.Add(0x6F);
-                            SOB.Add(0x62);
-                            a.SOB = SOB.ToArray();
-                            a.Palette = u;
-                            End.Add(a);
-                        }
+                        memblock[Enemytable + (Enemynum * 0x90) + 0x70] = (byte)(36 - ((tileheight1temp << 3) / 2) + (memblock[0xC6D62 + (Enemynum * 2)] / 2));
+                        memblock[Enemytable + (Enemynum * 0x90) + 0x71] = (byte)(36 - ((tileheight2temp << 3) / 2) + (memblock[0xC6D62 + (Enemynum * 2)] / 2));
                     }
+                    if (tileheight1temp >= 12)
+                        memblock[Enemytable + (Enemynum * 0x90) + 0x72] = (byte)(256 - (((tileheight1temp - 12) << 3) / 2));
+                    else
+                        memblock[Enemytable + (Enemynum * 0x90) + 0x72] = 0;
+                    if (tileheight2temp >= 12)
+                        memblock[Enemytable + (Enemynum * 0x90) + 0x73] = (byte)(256 - (((tileheight2temp - 12) << 3) / 2));
+                    else
+                        memblock[Enemytable + (Enemynum * 0x90) + 0x73] = 0;
+                    FinalProducts a = new FinalProducts();
+                    a.CCG = CCG;
+                    a.SOB = SOB;
+                    a.Palette = PALette;
+                    End.Add(a);
+                }
+                else
+                {
+                    FinalProducts a = new FinalProducts();
+                    int[] pointers = Extraction.getPointers(memblock, Num);
+                    a.SOB = GBA.SOB.getSOB(memblock, pointers[0]);
+                    a.CCG = GBA.CCG.getCCG(memblock, pointers[1]);
+                    a.Palette = GBA.PAL.getPalette(memblock, pointers[2], 4);
+                    End.Add(a);
                 }
             }
+            FreeSpace.Pointers.Removal(memblock);
             for (int Enemynum = 0; Enemynum <= 256; Enemynum++)
             {
                 progress?.Report(new ProgressPercent("Inserting Enemy " + Enemynum + "'s Graphics",

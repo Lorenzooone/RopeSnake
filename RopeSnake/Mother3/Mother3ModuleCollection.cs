@@ -16,9 +16,9 @@ namespace RopeSnake.Mother3
 {
     public sealed class Mother3ModuleCollection : IEnumerable<Mother3Module>
     {
-        //public DataModule Data { get; private set; }
-        //public TextModule Text { get; private set; }
-        //public MapModule Maps { get; private set; }
+        public DataModule Data { get; private set; }
+        public TextModule Text { get; private set; }
+        public MapModule Maps { get; private set; }
         public TitleModule Title { get; private set; }
 
         #region Reflection wasteland
@@ -41,15 +41,19 @@ namespace RopeSnake.Mother3
             }
         }
 
-        public Mother3ModuleCollection(Mother3RomConfig romConfig, Mother3ProjectSettings projectSettings,
-            params string[] modulesToLoad)
+        public Mother3ModuleCollection(Mother3RomConfig romConfig, Mother3ProjectSettings projectSettings)
         {
-            foreach (string key in modulesToLoad)
+            if (projectSettings.LoadedModules == null)
+                projectSettings.LoadedModules = Mother3ProjectSettings.DefaultModules;
+            foreach (string key in projectSettings.LoadedModules)
             {
-                _loadedModules.Add(key, CreateModule(_keyToModule[key], romConfig, projectSettings));
+                if (_keyToModule.ContainsKey(key))
+                {
+                    _loadedModules.Add(key, CreateModule(_keyToModule[key], romConfig, projectSettings));
 
-                var moduleProperty = GetType().GetProperty(key);
-                moduleProperty.SetValue(this, this[key]);
+                    var moduleProperty = GetType().GetProperty(key);
+                    moduleProperty.SetValue(this, this[key]);
+                }
             }
         }
 

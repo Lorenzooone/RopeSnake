@@ -353,6 +353,95 @@ namespace GBA
         {
             return PALGet(data, 0);
         }
+        public static byte[] getPalette(byte[] data, int address, int bpp)
+        {
+            byte[] result = new byte[2 * (2 << bpp)];
+            for (int i = 0; i < 2 * (2 << bpp); i++)
+                result[i] = data[address + i];
+            return result;
+        }
+    }
+    public class CCG
+    {
+        public static byte[] CCGStart = new byte[] { 0x63, 0x63, 0x67, 0x20 };
+        public static byte[] CCGEnd = new byte[] { 0x7E, 0x63, 0x63, 0x67 };
+        public static byte[] getCCG(byte[] memblock, int position)
+        {
+            for (int i = 0; i < CCGStart.Length; i++)
+                if (CCGStart[i] != memblock[position + i])
+                    return null;
+            byte[] ReturnCCG = new byte[0xC + LZ77.getLength(memblock, position + 0xC) + 0x4];
+            for (int i = 0; i < ReturnCCG.Length - 4; i++)
+                ReturnCCG[i] = memblock[position + i];
+            for (int i = 0; i < CCGEnd.Length; i++)
+                ReturnCCG[ReturnCCG.Length - 4 + i] = CCGEnd[i];
+            return ReturnCCG;
+        }
+    }
+    public class SOB
+    {
+        public static byte[] SOBStart = new byte[] { 0x73, 0x6F, 0x62, 0x20 };
+        public static byte[] SOBEnd = new byte[] { 0x7E, 0x73, 0x6F, 0x62 };
+        public static byte[] getSOB(byte[] memblock, int position)
+        {
+            for (int i = 0; i < SOBStart.Length; i++)
+                if (SOBStart[i] != memblock[position + i])
+                    return null;
+            List<byte> CreatedSOB = new List<byte>();
+            CreatedSOB.AddRange(SOBStart);
+            for (int i = 0; i < 4; i++)
+                CreatedSOB.Add(memblock[position + i + 4]);
+            int primaryEntries = memblock[position + 4] + (memblock[position + 5] << 8);
+            int secondaryEntries = memblock[position + 6] + (memblock[position + 7] << 8);
+            int offsetTableLength = 2 * (primaryEntries + secondaryEntries);
+            if (offsetTableLength % 4 != 0)
+                offsetTableLength += 2;
+            byte[] offsetTable = new byte[offsetTableLength];
+            int offsetTableBegin = 8;
+            List<int> Explored = new List<int>();
+            List<int> CorrespondingExplored = new List<int>();
+            CreatedSOB.AddRange(offsetTable);
+            for (int i = 0; i < primaryEntries + secondaryEntries; i++)
+            {
+                int foundOffset = memblock[offsetTableBegin + position] + (memblock[offsetTableBegin + position + 1] << 8);
+                if (Explored.Contains(foundOffset))
+                {
+                    CreatedSOB[offsetTableBegin] = (byte)(CorrespondingExplored[Explored.IndexOf(foundOffset)] & 0xFF);
+                    CreatedSOB[offsetTableBegin + 1] = (byte)((CorrespondingExplored[Explored.IndexOf(foundOffset)] >> 8) & 0xFF);
+                }
+                else
+                {
+                    CreatedSOB[offsetTableBegin] = (byte)(CreatedSOB.Count & 0xFF);
+                    CreatedSOB[offsetTableBegin + 1] = (byte)((CreatedSOB.Count >> 8) & 0xFF);
+                    Explored.Add(foundOffset);
+                    CorrespondingExplored.Add(CreatedSOB.Count);
+                    if (i < primaryEntries)
+                        CreatedSOB.AddRange(getPrimaryEntry(memblock, position + foundOffset));
+                    else
+                        CreatedSOB.AddRange(getSecondaryEntry(memblock, position + foundOffset));
+                }
+                offsetTableBegin += 2;
+            }
+            CreatedSOB.AddRange(SOBEnd);
+            return CreatedSOB.ToArray();
+        }
+        public static byte[] getPrimaryEntry(byte[] data, int position)
+        {
+            int preCount = data[position] + (data[position + 1] << 8);
+            int count = data[position + (preCount * 8) + 2] + (data[position + (preCount * 8) + 3] << 8);
+            byte[] entry = new byte[(preCount * 8) + (count * 8) + 4];
+            for (int i = 0; i < entry.Length; i++)
+                entry[i] = data[position + i];
+            return entry;
+        }
+        public static byte[] getSecondaryEntry(byte[] data, int position)
+        {
+            int byteCount = 4 + data[position] + (data[position + 1] << 8);
+            byte[] entry = new byte[byteCount];
+            for (int i = 0; i < entry.Length; i++)
+                entry[i] = data[position + i];
+            return entry;
+        }
     }
 }
 namespace RopeSnake.Mother3.Enemy_Graphics
@@ -368,19 +457,24 @@ namespace RopeSnake.Mother3.Enemy_Graphics
             Directory.CreateDirectory(outputPath);
             for (int i = 0; i <= 256; i++)
             {
-                int Enemynum = i;
-                int PoiSOB = BaseSOB + (Enemynum * 8);
-                int PoiCCG = BaseCCG + (Enemynum * 8);
-                int PoiPAL = BasePAL + (Enemynum * 8);
-                PoiSOB = memblock[PoiSOB] + (memblock[PoiSOB + 1] << 8) + (memblock[PoiSOB + 2] << 16) + (memblock[PoiSOB + 3] << 24) + Base;//SOB
-                PoiCCG = memblock[PoiCCG] + (memblock[PoiCCG + 1] << 8) + (memblock[PoiCCG + 2] << 16) + (memblock[PoiCCG + 3] << 24) + Base;//CCG
-                PoiPAL = memblock[PoiPAL] + (memblock[PoiPAL + 1] << 8) + (memblock[PoiPAL + 2] << 16) + (memblock[PoiPAL + 3] << 24) + Base;//Palette
+                int[] pointers = getPointers(memblock, i);
                 Byte[] Image;
-                GBA.LZ77.Decompress(memblock, PoiCCG + 12, out Image);
-                List<GBA.OAM> OAMEntries = GBA.OAM.OAMGet(memblock, PoiSOB);
-                GBA.PAL[] Palette = GBA.PAL.PALGet(memblock, PoiPAL);
-                Output(OAMEntries, Palette, Image, Enemynum, outputPath, Progress);
+                GBA.LZ77.Decompress(memblock, pointers[1] + 12, out Image);
+                List<GBA.OAM> OAMEntries = GBA.OAM.OAMGet(memblock, pointers[0]);
+                GBA.PAL[] Palette = GBA.PAL.PALGet(memblock, pointers[2]);
+                Output(OAMEntries, Palette, Image, i, outputPath, Progress);
             }
+        }
+        public static int[] getPointers(byte[] memblock, int Enemynum)
+        {
+            int[] returnArray = new int[3];
+            int PoiSOB = BaseSOB + (Enemynum * 8);
+            int PoiCCG = BaseCCG + (Enemynum * 8);
+            int PoiPAL = BasePAL + (Enemynum * 8);
+            returnArray[0] = memblock[PoiSOB] + (memblock[PoiSOB + 1] << 8) + (memblock[PoiSOB + 2] << 16) + (memblock[PoiSOB + 3] << 24) + Base;//SOB
+            returnArray[1] = memblock[PoiCCG] + (memblock[PoiCCG + 1] << 8) + (memblock[PoiCCG + 2] << 16) + (memblock[PoiCCG + 3] << 24) + Base;//CCG
+            returnArray[2] = memblock[PoiPAL] + (memblock[PoiPAL + 1] << 8) + (memblock[PoiPAL + 2] << 16) + (memblock[PoiPAL + 3] << 24) + Base;//Palette
+            return returnArray;
         }
         public static void Output(List<GBA.OAM> OAMEntry, GBA.PAL[] Palette, byte[] Image, int Num, string outputPath, IProgress<ProgressPercent> Progress)
         {

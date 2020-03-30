@@ -19,8 +19,17 @@ namespace RopeSnake.Mother3
             //"Data",
             //"Text",
             //"Maps",
-            "Title"
+            "Title",
+            "Battle Sprites"
         };
+
+        public string[] LoadedModules
+        {
+            get { return _loadedModules; }
+            set { SetField(ref _loadedModules, value); }
+        }
+
+        private string[] _loadedModules;
 
         public string BaseRomFile
         {
@@ -58,7 +67,8 @@ namespace RopeSnake.Mother3
                 BaseRomFile = "/base.gba",
                 OutputRomFile = "/test.gba",
                 RomConfigFile = "/rom.config.json",
-                OffsetTableMode = OffsetTableMode.Fragmented
+                OffsetTableMode = OffsetTableMode.Fragmented,
+                LoadedModules = DefaultModules.ToArray()
             };
         }
 

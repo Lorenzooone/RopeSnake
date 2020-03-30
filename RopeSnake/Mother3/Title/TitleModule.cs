@@ -58,6 +58,7 @@ namespace RopeSnake.Mother3.Title
         public static List<Bitmap> Health;
         public static Bitmap Disclaimer;
         public static Bitmap GBAPlayer;
+        private static TitleSettings Title_Settings;
         private static Frames Framesi;
         private static List<XY> OAMImport;
         private static List<byte[]> OAMRemains_Title;
@@ -79,55 +80,66 @@ namespace RopeSnake.Mother3.Title
         }
         public override void ReadFromFiles(IFileSystem fileSystem)
         {
-            Logo = new List<Bitmap>();
-            Menu_Options = new List<Bitmap>();
-             Health = new List<Bitmap>();
-            for (int i = 0; i < 4; i++)
-                ReadImage(fileSystem, LogoPath[i], Logo);
-            ReadImage(fileSystem, "/title/TitleStatic.png", Logo);
-            for (int i = 0; i < 21; i++)
-            {
-                string a;
-                if (i < 10)
-                    a = "/title/TitleFrame0" + i + ".png";
-                else
-                    a = "/title/TitleFrame" + i + ".png";
-                ReadImage(fileSystem, a, Logo);
-            }
-            for (int i = 0; i < 4; i++)
-            {
-                string a;
-                if ((i) < 10)
-                    a = "/title/Option0" + (i) + ".png";
-                else
-                    a = "/title/Option" + (i) + ".png";
-                ReadImage(fileSystem, a, Menu_Options);
-            }
-            ReadImage(fileSystem, "/title/OptionPalette.png", ref Menu_Options_Palettes);
-            ReadImage(fileSystem, "/title/Numbers.png", ref Numbers);
-            ReadImage(fileSystem, "/title/HealthScreen.png", Health);
-            ReadImage(fileSystem, "/title/HealthPress.png", Health);
-            ReadImage(fileSystem, "/title/GBAPlayerLogo.png", ref GBAPlayer);
-            if (RomConfig.IsEnglish)
-                ReadImage(fileSystem, "/title/Disclaimer.png", ref Disclaimer);
             var jsonManager = new JsonFileManager(fileSystem);
             RegisterFileManagerProgress(jsonManager);
-            Framesi= jsonManager.ReadJson<Frames>("/title/configFrames.json".ToPath());
+            Framesi = jsonManager.ReadJson<Frames>("/title/configFrames.json".ToPath());
             OAMImport = jsonManager.ReadJson<List<XY>>("/title/configOam.json".ToPath());
-            OAMRemains_Title = new List<byte[]>();
-            for (int i = 0; i < 2; i++)
+            if (fileSystem.Exists("/title/title_settings.json".ToPath()))
+                Title_Settings = jsonManager.ReadJson<TitleSettings>("/title/title_settings.json".ToPath());
+            else
+                Title_Settings = TitleSettings.DefaultSettings(RomConfig.IsEnglish, RomConfig.Version == "en_v12");
+            Logo = new List<Bitmap>();
+            Menu_Options = new List<Bitmap>();
+            Health = new List<Bitmap>();
+            if (Title_Settings.Title_Screen)
             {
-                var j = fileSystem.OpenFile(("/title/OAM_Remains_Title_" + i.ToString() + ".bin").ToPath(), FileAccess.Read);
-                byte[] buffer = new byte[j.Length];
-                j.Read(buffer, 0, (int)j.Length);
-                j.Close();
-                OAMRemains_Title.Add(buffer);
+                for (int i = 0; i < 4; i++)
+                    ReadImage(fileSystem, LogoPath[i], Logo);
+                ReadImage(fileSystem, "/title/TitleStatic.png", Logo);
+                for (int i = 0; i < 21; i++)
+                {
+                    string a;
+                    if (i < 10)
+                        a = "/title/TitleFrame0" + i + ".png";
+                    else
+                        a = "/title/TitleFrame" + i + ".png";
+                    ReadImage(fileSystem, a, Logo);
+                }
+                for (int i = 0; i < 4; i++)
+                {
+                    string a;
+                    if ((i) < 10)
+                        a = "/title/Option0" + (i) + ".png";
+                    else
+                        a = "/title/Option" + (i) + ".png";
+                    ReadImage(fileSystem, a, Menu_Options);
+                }
+                ReadImage(fileSystem, "/title/OptionPalette.png", ref Menu_Options_Palettes);
+                ReadImage(fileSystem, "/title/Numbers.png", ref Numbers);
+                OAMRemains_Title = new List<byte[]>();
+                for (int i = 0; i < 2; i++)
+                {
+                    var j = fileSystem.OpenFile(("/title/OAM_Remains_Title_" + i.ToString() + ".bin").ToPath(), FileAccess.Read);
+                    byte[] buffer = new byte[j.Length];
+                    j.Read(buffer, 0, (int)j.Length);
+                    j.Close();
+                    OAMRemains_Title.Add(buffer);
+                }
             }
-            var HealthJ = fileSystem.OpenFile(("/title/OAM_Remains_Health_0.bin").ToPath(), FileAccess.Read);
-            byte[] HealthBuffer = new byte[HealthJ.Length];
-            HealthJ.Read(HealthBuffer, 0, (int)HealthJ.Length);
-            HealthJ.Close();
-            OAMRemains_Health = HealthBuffer;
+            if (Title_Settings.Health)
+            {
+                ReadImage(fileSystem, "/title/HealthScreen.png", Health);
+                ReadImage(fileSystem, "/title/HealthPress.png", Health);
+                var HealthJ = fileSystem.OpenFile(("/title/OAM_Remains_Health_0.bin").ToPath(), FileAccess.Read);
+                byte[] HealthBuffer = new byte[HealthJ.Length];
+                HealthJ.Read(HealthBuffer, 0, (int)HealthJ.Length);
+                HealthJ.Close();
+                OAMRemains_Health = HealthBuffer;
+            }
+            if(Title_Settings.GBAPlayer)
+                ReadImage(fileSystem, "/title/GBAPlayerLogo.png", ref GBAPlayer);
+            if (RomConfig.IsEnglish && Title_Settings.Disclaimer)
+                ReadImage(fileSystem, "/title/Disclaimer.png", ref Disclaimer);
         }
 
         public override void WriteToFiles(IFileSystem fileSystem, ISet<object> staleObjects)
@@ -172,12 +184,6 @@ namespace RopeSnake.Mother3.Title
             Logo = newLogo;
             if (RomConfig.IsEnglish)
                 SaveImage(fileSystem, Disclaimer, "/title/Disclaimer.png");
-            var jsonManager = new JsonFileManager(fileSystem);
-            RegisterFileManagerProgress(jsonManager);
-            jsonManager.WriteJson("/title/configFrames.json".ToPath(), Framesi);
-            var u = OAMTotal.d;
-            OAMImport = u;
-            jsonManager.WriteJson("/title/configOam.json".ToPath(), u);
             OAMRemains_Title = new List<byte[]>();
             for (int i = 0; i < OAMTotal.OAMRemains_Title.Count; i++)
             {
@@ -190,6 +196,15 @@ namespace RopeSnake.Mother3.Title
             var HealthJ = fileSystem.CreateFile(("/title/OAM_Remains_Health_0.bin").ToPath());
             HealthJ.Write(OAMRemains_Health, 0, OAMRemains_Health.Length);
             HealthJ.Close();
+            Title_Settings = TitleSettings.DefaultSettings(RomConfig.IsEnglish, RomConfig.Version == "en_v12");
+            var jsonManager = new JsonFileManager(fileSystem);
+            RegisterFileManagerProgress(jsonManager);
+            jsonManager.WriteJson("/title/configFrames.json".ToPath(), Framesi);
+            var u = OAMTotal.d;
+            OAMImport = u;
+            jsonManager.WriteJson("/title/configOam.json".ToPath(), u);
+            jsonManager.WriteJson("/title/title_settings.json".ToPath(), Title_Settings);
+
         }
 
         public override void ReadFromRom(Block romData)
@@ -218,53 +233,71 @@ namespace RopeSnake.Mother3.Title
             int baseAddressTitle = RomConfig.GetOffset(TitleKey, romData);
             int baseAddressHealth = RomConfig.GetOffset(HealthKey, romData);
             int baseAddressPauseFrames = RomConfig.GetSingleReference(TitleFramesKey);
+            int TitleEnd = 0;
 
             //Title graphics table
-            Final = new List<byte[]>();
-            Final.AddRange(TitleImport.LogoImport(Logo));
-            Final.AddRange(TitleImport.MenuImport(Menu_Options, OAMImport, Menu_Options_Palettes, Numbers, OAMRemains_Title));
-            byte[] finalTitleTable = CreateTable(Final, 0);
-            for (int i = 0; i < finalTitleTable.Length; i++)
-                romData.Data[baseAddressTitle + i] = finalTitleTable[i];
-            int TitleEnd = baseAddressTitle + finalTitleTable.Length;
+            if (Title_Settings.Title_Screen)
+            {
+                Final = new List<byte[]>();
+                Final.AddRange(TitleImport.LogoImport(Logo));
+                Final.AddRange(TitleImport.MenuImport(Menu_Options, OAMImport, Menu_Options_Palettes, Numbers, OAMRemains_Title));
+                byte[] finalTitleTable = CreateTable(Final, 0);
+                for (int i = 0; i < finalTitleTable.Length; i++)
+                    romData.Data[baseAddressTitle + i] = finalTitleTable[i];
+                TitleEnd = baseAddressTitle + finalTitleTable.Length;
+            }
 
             //Health table
-            List<byte[]> Health_Final = TitleImport.HealthImport(Health, OAMImport[OAMImport.Count - 1], OAMRemains_Health);
-            int offset = 0;
-            if ((getTotalLength_Table(Health_Final) - getLength_PointerTable(Health_Final)) > getSpecialROMTableLength(romData.Data, baseAddressHealth))
+            if (Title_Settings.Health)
             {
-                offset = TitleEnd - baseAddressHealth;
-                TitleEnd += getTotalLength_Table(Health_Final) - getLength_PointerTable(Health_Final);
+                List<byte[]> Health_Final = TitleImport.HealthImport(Health, OAMImport[OAMImport.Count - 1], OAMRemains_Health);
+                int offset = 0;
+                if ((getTotalLength_Table(Health_Final) - getLength_PointerTable(Health_Final)) > getSpecialROMTableLength(romData.Data, baseAddressHealth))
+                {
+                    if (TitleEnd == 0)
+                        throw new Exception("Health table is too big!");
+                    offset = TitleEnd - baseAddressHealth;
+                    TitleEnd += getTotalLength_Table(Health_Final) - getLength_PointerTable(Health_Final);
+                }
+                else
+                    offset = getSpecialROMTableStart(romData.Data, baseAddressTitle) - getLength_PointerTable(Health_Final);
+                byte[] finalHealthTable = CreateTable(Health_Final, offset);
+                for (int i = 0; i < getLength_PointerTable(Health_Final); i++)
+                    romData.Data[baseAddressHealth + i] = finalHealthTable[i];
+                for (int i = getLength_PointerTable(Health_Final); i < finalHealthTable.Length; i++)
+                    romData.Data[baseAddressHealth + i + offset] = finalHealthTable[i];
             }
-            else
-                offset = getSpecialROMTableStart(romData.Data, baseAddressTitle) - getLength_PointerTable(Health_Final);
-            byte[] finalHealthTable = CreateTable(Health_Final, offset);
-            for (int i = 0; i < getLength_PointerTable(Health_Final); i++)
-                romData.Data[baseAddressHealth + i] = finalHealthTable[i];
-            for (int i = getLength_PointerTable(Health_Final); i < finalHealthTable.Length; i++)
-                romData.Data[baseAddressHealth + i + offset] = finalHealthTable[i];
 
             //GBA Player Logo data
-            List<byte[]> GBA_Final = TitleImport.GBAPlayerLogoImport(GBAPlayer);
-            int baseGBAPaletteAddress = RomConfig.GetOffset(GBAPlayerPaletteKey, romData);
-            int baseGBAArrangementAddress = RomConfig.GetOffset(GBAPlayerArrangementKey, romData);
-            int baseGBAGraphicsAddress = TitleEnd;
-            TitleEnd += GBA_Final[1].Length;
-            UpdateRomReferences(romData, GBAPlayerGraphicsKey, baseGBAGraphicsAddress);
-            for (int i = 0; i < GBA_Final[0].Length; i++)
-                romData.Data[baseGBAPaletteAddress + i] = GBA_Final[0][i];
-            for (int i = 0; i < GBA_Final[1].Length; i++)
-                romData.Data[baseGBAGraphicsAddress + i] = GBA_Final[1][i];
-            for (int i = 0; i < GBA_Final[2].Length; i++)
-                romData.Data[baseGBAArrangementAddress + i] = GBA_Final[2][i];
+            if (Title_Settings.GBAPlayer)
+            {
+                List<byte[]> GBA_Final = TitleImport.GBAPlayerLogoImport(GBAPlayer);
+                int baseGBAPaletteAddress = RomConfig.GetOffset(GBAPlayerPaletteKey, romData);
+                int baseGBAArrangementAddress = RomConfig.GetOffset(GBAPlayerArrangementKey, romData);
+                int baseGBAGraphicsAddress = TitleEnd;
+                if (TitleEnd == 0)
+                    baseGBAGraphicsAddress = RomConfig.GetOffset(GBAPlayerGraphicsKey, romData);
+                else
+                    TitleEnd += GBA_Final[1].Length;
+                UpdateRomReferences(romData, GBAPlayerGraphicsKey, baseGBAGraphicsAddress);
+                for (int i = 0; i < GBA_Final[0].Length; i++)
+                    romData.Data[baseGBAPaletteAddress + i] = GBA_Final[0][i];
+                for (int i = 0; i < GBA_Final[1].Length; i++)
+                    romData.Data[baseGBAGraphicsAddress + i] = GBA_Final[1][i];
+                for (int i = 0; i < GBA_Final[2].Length; i++)
+                    romData.Data[baseGBAArrangementAddress + i] = GBA_Final[2][i];
+            }
 
             //Disclaimer data
-            if (RomConfig.IsEnglish)
+            if (RomConfig.IsEnglish && Title_Settings.Disclaimer)
             {
                 List<byte[]> Disclaimer_Final = TitleImport.DisclaimerImport(Disclaimer);
                 int baseDisclaimerPaletteAddress = RomConfig.GetOffset(DisclaimerPaletteKey, romData);
                 int baseDisclaimerGraphicsAddress = TitleEnd;
-                TitleEnd += Disclaimer_Final[1].Length;
+                if (TitleEnd == 0)
+                    baseDisclaimerGraphicsAddress = RomConfig.GetOffset(DisclaimerGraphicsKey, romData);
+                else
+                    TitleEnd += Disclaimer_Final[1].Length;
                 UpdateRomReferences(romData, DisclaimerGraphicsKey, baseDisclaimerGraphicsAddress);
                 for (int i = 0; i < Disclaimer_Final[0].Length; i++)
                     romData.Data[baseDisclaimerPaletteAddress + i] = Disclaimer_Final[0][i];

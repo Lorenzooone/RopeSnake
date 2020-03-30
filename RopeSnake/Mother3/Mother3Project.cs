@@ -35,11 +35,11 @@ namespace RopeSnake.Mother3
         public HashSet<object> StaleObjects { get; private set; }
 
         private Mother3Project(Mother3RomConfig romConfig,
-            Mother3ProjectSettings projectSettings, params string[] modulesToLoad)
+            Mother3ProjectSettings projectSettings)
         {
             RomConfig = romConfig;
             ProjectSettings = projectSettings;
-            Modules = new Mother3ModuleCollection(romConfig, projectSettings, modulesToLoad);
+            Modules = new Mother3ModuleCollection(romConfig, projectSettings);
         }
 
         private void UpdateRomConfig(Block romData)
@@ -71,7 +71,7 @@ namespace RopeSnake.Mother3
             var romConfig = JsonConvert.DeserializeObject<Mother3RomConfig>(File.ReadAllText(romConfigPath));
             var projectSettings = Mother3ProjectSettings.CreateDefault();
 
-            var project = new Mother3Project(romConfig, projectSettings, Mother3ProjectSettings.DefaultModules);
+            var project = new Mother3Project(romConfig, projectSettings);
             project.UpdateRomConfig(romData);
 
             if (romConfig.IsJapanese)
@@ -98,7 +98,7 @@ namespace RopeSnake.Mother3
             var binaryManager = new BinaryFileManager(fileSystem);
             var baseRom = binaryManager.ReadFile<Block>(projectSettings.BaseRomFile.ToPath());
 
-            var project = new Mother3Project(romConfig, projectSettings, Mother3ProjectSettings.DefaultModules);
+            var project = new Mother3Project(romConfig, projectSettings);
             project.UpdateRomConfig(baseRom);
 
             foreach (var module in project.Modules)
@@ -165,7 +165,8 @@ namespace RopeSnake.Mother3
             //Modules.Maps.UpdateNameHints(Modules.Text);
             _log.Info("Decompiling enemies graphics");
             outputO = output;
-            Extraction.Extract(baseRom.Data, output + "\\BattleSprites\\", progress);
+            if(ProjectSettings.LoadedModules.Contains("Battle Sprites"))
+                Extraction.Extract(baseRom.Data, output + "\\BattleSprites\\", progress);
             _log.Info("Finished decompiling project");
         }
         public void Compile(IFileSystemWrapper fileSystem, bool useCache, int maxThreads = 1,
@@ -195,7 +196,8 @@ namespace RopeSnake.Mother3
             var compiler = Compiler.Create(outputRomData, allocator, Modules, cache, maxThreads);
             compiler.AllocationAlignment = 4;
             var compilationResult = compiler.Compile(progress);
-            Importing.Import(ref outputRomData, progress, outputO);
+            if(ProjectSettings.LoadedModules.Contains("Battle Sprites"))
+                Importing.Import(ref outputRomData, progress, outputO);
             //_log.Debug("Filling free ranges with 0xFF");
             //FillFreeRanges(outputRomData, allocator.Ranges, 0xFF);
             _log.Info($"Writing output ROM file to {ProjectSettings.OutputRomFile}");
