@@ -214,13 +214,18 @@ namespace RopeSnake.Mother3.Title
             Health = new List<Bitmap>();
             Framesi = new Frames();
             int offset = RomConfig.GetOffset(TitleKey, romData);
+            int total = 4 + (RomConfig.IsEnglish ? 1 : 0);
+            Progress?.Report(new ProgressPercent("Reading Title table", 100f/total));
             Logo = TitleExport.Begin(romData, offset);
             offset = RomConfig.GetOffset(HealthKey, romData);
+            Progress?.Report(new ProgressPercent("Reading Health table", 200f / total));
             Health = TitleExport.Health(romData, offset);
+            Progress?.Report(new ProgressPercent("Reading GBA Player table", 300f / total));
             GBAPlayer = TitleExport.GBAPlayerLogo(romData, RomConfig.GetOffset(GBAPlayerPaletteKey, romData), RomConfig.GetOffset(GBAPlayerGraphicsKey, romData), RomConfig.GetOffset(GBAPlayerArrangementKey, romData));
             if (RomConfig.IsEnglish)
             {
                 offset= RomConfig.GetOffset(DisclaimerGraphicsKey, romData);
+                Progress?.Report(new ProgressPercent("Reading GBA Player table", 400f / total));
                 Disclaimer = TitleExport.Disclaimer(romData, offset, RomConfig.GetOffset(DisclaimerPaletteKey, romData));
             }
             offset = 0;
@@ -239,7 +244,9 @@ namespace RopeSnake.Mother3.Title
             if (Title_Settings.Title_Screen)
             {
                 Final = new List<byte[]>();
+                Progress?.Report(new ProgressPercent("Compiling logos", 100f / 3f));
                 Final.AddRange(TitleImport.LogoImport(Logo));
+                Progress?.Report(new ProgressPercent("Compiling menu", 200f / 3f));
                 Final.AddRange(TitleImport.MenuImport(Menu_Options, OAMImport, Menu_Options_Palettes, Numbers, OAMRemains_Title));
                 byte[] finalTitleTable = CreateTable(Final, 0);
                 for (int i = 0; i < finalTitleTable.Length; i++)
@@ -250,6 +257,7 @@ namespace RopeSnake.Mother3.Title
             //Health table
             if (Title_Settings.Health)
             {
+                Progress?.Report(new ProgressPercent("Compiling health table", 100f / 2f));
                 List<byte[]> Health_Final = TitleImport.HealthImport(Health, OAMImport[OAMImport.Count - 1], OAMRemains_Health);
                 int offset = 0;
                 if ((getTotalLength_Table(Health_Final) - getLength_PointerTable(Health_Final)) > getSpecialROMTableLength(romData.Data, baseAddressHealth))
@@ -271,6 +279,7 @@ namespace RopeSnake.Mother3.Title
             //GBA Player Logo data
             if (Title_Settings.GBAPlayer)
             {
+                Progress?.Report(new ProgressPercent("Compiling gba player logo", 100f / 2f));
                 List<byte[]> GBA_Final = TitleImport.GBAPlayerLogoImport(GBAPlayer);
                 int baseGBAPaletteAddress = RomConfig.GetOffset(GBAPlayerPaletteKey, romData);
                 int baseGBAArrangementAddress = RomConfig.GetOffset(GBAPlayerArrangementKey, romData);
@@ -291,6 +300,7 @@ namespace RopeSnake.Mother3.Title
             //Disclaimer data
             if (RomConfig.IsEnglish && Title_Settings.Disclaimer)
             {
+                Progress?.Report(new ProgressPercent("Compiling disclaimer", 100f / 2f));
                 List<byte[]> Disclaimer_Final = TitleImport.DisclaimerImport(Disclaimer);
                 int baseDisclaimerPaletteAddress = RomConfig.GetOffset(DisclaimerPaletteKey, romData);
                 int baseDisclaimerGraphicsAddress = TitleEnd;
