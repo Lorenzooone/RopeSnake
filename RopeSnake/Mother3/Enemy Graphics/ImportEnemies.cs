@@ -2068,7 +2068,12 @@ namespace RopeSnake.Mother3.Enemy_Graphics
                                 SOB = SOBGen(OAMFront, OAMBack, tileheight1, tilewidth1, tilewidth2, Back);
                             }
                             else
+                            {
+                                tileheight = tileheight1;
+                                tileheight1temp = tileheight;
+                                tileheight2temp = tileheight;
                                 Back = 0;
+                            }
                         }
                         else
                             Back = 0;
@@ -2192,6 +2197,7 @@ namespace RopeSnake.Mother3.Enemy_Graphics
             {
                 if (End[Enemynum].ToCCG == Enemynum)
                 {
+                    LastCCG = (LastCCG & 3) == 0? LastCCG : LastCCG + (4 - (LastCCG & 3));
                     End[Enemynum].AddressCCG = LastCCG;
                     LastCCG = InsertPointer(memblock, End[Enemynum].CCG, End[Enemynum].PointerCCG, LastCCG);
                 }
@@ -2205,10 +2211,12 @@ namespace RopeSnake.Mother3.Enemy_Graphics
             { 
                 if (End[Enemynum].ToSOB == Enemynum)
                 {
+                    LastSOB = (LastSOB & 3) == 0 ? LastSOB : LastSOB + (4 - (LastSOB & 3));
                     if (EndingSOB - LastSOB - End[Enemynum].SOB.Count() > 0)
                         End[Enemynum].AddressSOB = LastSOB;
                     else
                     {
+                        LastCCG = (LastCCG & 3) == 0 ? LastCCG : LastCCG + (4 - (LastCCG & 3));
                         End[Enemynum].AddressSOB = LastCCG;
                         LastSOB = LastCCG;
                     }
