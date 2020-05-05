@@ -29,5 +29,9 @@ namespace RopeSnake.Mother3.Title
         public TitleSettings(bool Health, bool GBAPlayer, bool Title_Screen):this(false, Health, GBAPlayer, Title_Screen)
         {
         }
+        public TitleSettings()
+        {
+
+        }
     }
 }
