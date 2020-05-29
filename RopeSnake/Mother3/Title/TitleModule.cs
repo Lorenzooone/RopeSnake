@@ -316,15 +316,15 @@ namespace RopeSnake.Mother3.Title
             }
 
             //Pause frames between the logo animation frames
-            if ((Framesi.PauseFrames >= 8)||(Framesi.PauseFrames<0))
+            if ((Framesi.PauseFrames < 0) || (Framesi.PauseFrames >= 256))
             {
+                romData.Data[baseAddressPauseFrames - 6] = 1;
                 romData.Data[baseAddressPauseFrames] = 0;
-                romData.Data[baseAddressPauseFrames + 3] = 0xD1;
             }
             else
             {
+                romData.Data[baseAddressPauseFrames - 6] = (byte)((byte)(Framesi.PauseFrames) + 1);
                 romData.Data[baseAddressPauseFrames] = (byte)(Framesi.PauseFrames);
-                romData.Data[baseAddressPauseFrames + 3] = 0xD9;
             }
         }
 
