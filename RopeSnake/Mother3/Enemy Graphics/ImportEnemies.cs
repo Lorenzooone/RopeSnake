@@ -600,6 +600,12 @@ namespace RopeSnake.Mother3.Enemy_Graphics
                         return false;
             return true;
         }
+        static int ConvertShortToInt(int a)
+        {
+            if ((a & 0xFFFF) >= 0x8000)
+                return -(0x10000 - (a & 0xFFFF));
+            return (a & 0xFFFF);
+        }
         static char ConvertHexToChar(int a)
         {
             switch (a)
@@ -2131,16 +2137,11 @@ namespace RopeSnake.Mother3.Enemy_Graphics
                                               }*/
                     memblock[Enemytable + (Enemynum * 0x90) + 0x6C] = 1;//Fix the heights, so we avoid problems.
                                                                         //I suggest making an algorythm that edits the value at "0xC6D62 + (Enemynum * 2)" based on the number of initial breaks in Memo entries. This value will be then used by my algorythm to make everything look pretty.
-                    if (memblock[0xC6D62 + (Enemynum * 2)] >= 128)
-                    {
-                        memblock[Enemytable + (Enemynum * 0x90) + 0x70] = (byte)(36 - ((tileheight1temp << 3) / 2) + (256 - ((256 - memblock[0xC6D62 + (Enemynum * 2)]) / 2)));
-                        memblock[Enemytable + (Enemynum * 0x90) + 0x71] = (byte)(36 - ((tileheight2temp << 3) / 2) + (256 - ((256 - memblock[0xC6D62 + (Enemynum * 2)]) / 2)));
-                    }
-                    else
-                    {
-                        memblock[Enemytable + (Enemynum * 0x90) + 0x70] = (byte)(36 - ((tileheight1temp << 3) / 2) + (memblock[0xC6D62 + (Enemynum * 2)] / 2));
-                        memblock[Enemytable + (Enemynum * 0x90) + 0x71] = (byte)(36 - ((tileheight2temp << 3) / 2) + (memblock[0xC6D62 + (Enemynum * 2)] / 2));
-                    }
+                                                                        //0x68 is the base target
+                    int actualBaseHeight = ConvertShortToInt(0x60 + memblock[0xC6D62 + (Enemynum * 2)] + (memblock[0xC6D62 + (Enemynum * 2) + 1] << 8));
+
+                    memblock[Enemytable + (Enemynum * 0x90) + 0x70] = (byte)(0x84 - (tileheight1temp << 2) - actualBaseHeight);
+                    memblock[Enemytable + (Enemynum * 0x90) + 0x71] = (byte)(0x84 - (tileheight2temp << 2) - actualBaseHeight);
                     if (tileheight1temp >= 12)
                         memblock[Enemytable + (Enemynum * 0x90) + 0x72] = (byte)(256 - (((tileheight1temp - 12) << 3) / 2));
                     else
