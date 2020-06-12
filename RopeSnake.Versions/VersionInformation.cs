@@ -8,7 +8,7 @@ namespace RopeSnake.Versions
 {
     public static class VersionInformation
     {
-        public const string Copyright = "Copyright (c) 2016 Jeff Erbrecht";
-        public const string RopeSnakeVersion = "0.1.1.4";
+        public const string Copyright = "Copyright (c) 2016 Jeff Erbrecht - 2020 Lorenzo Carletti";
+        public const string RopeSnakeVersion = "0.1.1.5";
     }
 }

@@ -35,7 +35,7 @@ namespace RopeSnake.UI.ProjectManager
             nameLabel.Content = $"RopeSnake {Versions.VersionInformation.RopeSnakeVersion}";
             copyrightLabel.Content = Versions.VersionInformation.Copyright;
             licenseLabel.Content = "MIT license";
-            githubLabel.Text = "https://github.com/jeffman/RopeSnake";
+            githubLabel.Text = "https://github.com/Lorenzooone/RopeSnake";
         }
 
         private void InitializeThirdParty()
